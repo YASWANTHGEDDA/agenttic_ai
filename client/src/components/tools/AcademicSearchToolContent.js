@@ -1,26 +1,26 @@
-// client/src/components/AcademicSearchTool.js
+// client/src/components/tools/AcademicSearchToolContent.js
 import React, { useState, useEffect } from 'react';
-import { searchCoreApi, searchCombinedAcademic, getProxiedFileDownloadUrl } from '../../services/api'; // Adjust path if needed
-import '../AcademicSearchTool.css'; // Import the CSS
+import { searchCoreApi, searchCombinedAcademic, getProxiedFileDownloadUrl } from '../../services/api';
+// import './AcademicSearchTool.css'; // Make sure this CSS file exists
 
-const AcademicSearchTool = () => {
+const AcademicSearchToolContent = ({ onSearchResults }) => {
     const [query, setQuery] = useState('');
-    const [searchSource, setSearchSource] = useState('combined'); // 'core' or 'combined'
-    
-    // CORE specific
-    const [maxPagesCore, setMaxPagesCore] = useState(1);
-    const [downloadPdfsCore, setDownloadPdfsCore] = useState(false);
-    
-    // Combined specific (can also apply to single sources if UI is adapted)
-    const [minYear, setMinYear] = useState('');
-    const [openAlexMax, setOpenAlexMax] = useState(5);
-    const [scholarMax, setScholarMax] = useState(3);
-
-    const [results, setResults] = useState(null); // Stores the entire response object
+    const [searchSource, setSearchSource] = useState('combined'); // 'combined' or 'core'
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const [results, setResults] = useState(null);
 
-    // Effect to clear results when searchSource changes to avoid confusion
+    // --- State for CORE Search ---
+    const [maxPagesCore, setMaxPagesCore] = useState(1);
+    const [downloadPdfsCore, setDownloadPdfsCore] = useState(false);
+    const [coreApiKey, setCoreApiKey] = useState(''); // State to hold the API key
+
+    // --- State for Combined Search ---
+    const [minYear, setMinYear] = useState('');
+    const [openAlexMax, setOpenAlexMax] = useState(10);
+    const [scholarMax, setScholarMax] = useState(5);
+
+    // Clear results and error when the search source changes
     useEffect(() => {
         setResults(null);
         setError('');
@@ -37,173 +37,134 @@ const AcademicSearchTool = () => {
         setResults(null);
 
         try {
-            let response;
+            let responseData;
             if (searchSource === 'core') {
-                response = await searchCoreApi(query, parseInt(maxPagesCore) || 1, downloadPdfsCore);
-            } else { // 'combined'
+                if (!coreApiKey.trim()) {
+                    setError('CORE API Key is required for this search source.');
+                    setIsLoading(false);
+                    return;
+                }
+                // Call the corrected CORE API function
+                responseData = await searchCoreApi(query, coreApiKey, parseInt(maxPagesCore, 10), downloadPdfsCore);
+            } else { // 'combined' search
                 const params = {
                     query,
-                    openalex_max_records: parseInt(openAlexMax) || 5,
-                    scholar_max_results: parseInt(scholarMax) || 3,
+                    openalex_max_records: parseInt(openAlexMax, 10),
+                    scholar_max_results: parseInt(scholarMax, 10),
                 };
-                if (minYear.trim() !== '') {
-                    params.min_year = minYear.trim();
+                if (minYear.trim()) {
+                    params.min_year = parseInt(minYear, 10);
                 }
-                response = await searchCombinedAcademic(params);
+                // Call the Combined Search function
+                responseData = await searchCombinedAcademic(params);
             }
-            setResults(response); // response contains { message, results_count, data, output_directory }
-            if (response.data && response.data.length === 0) {
-                setError('No results found for your query.');
+            
+            // Standardize the result object for display
+            const resultObject = {
+                message: `Search complete. Found ${responseData?.length || 0} papers.`,
+                data: Array.isArray(responseData) ? responseData : [],
+                // Heuristic for CSV download link, adjust if backend changes filename
+                download_link_relative: responseData?.length > 0 
+                    ? `${searchSource}_search/combined_academic_search_results.csv` 
+                    : null
+            };
+            
+            setResults(resultObject);
+
+            if (onSearchResults) {
+                onSearchResults(resultObject);
             }
-            console.log('Search Response:', response);
+
         } catch (err) {
             console.error("Search error:", err);
-            setError(err.message || 'Failed to perform search. Please check the console and server logs.');
-            setResults({ message: "Search failed", results_count: 0, data: [] }); // Ensure results.data is an array
+            setError(err.message || 'Failed to perform search.');
+            setResults({ message: "Search failed", data: [] });
         } finally {
             setIsLoading(false);
         }
     };
-    
-    const getRelativePathForDownload = (absoluteServerPath, baseOutputDirName, subDir) => {
-        // Example: absoluteServerPath = "D:\\Chatbot-main\\server\\data_outputs\\core_academic_search\\core_pdfs\\some_file.pdf"
-        //          baseOutputDirName = "core_academic_search" (this would be config.CORE_OUTPUT_DIR_NAME from python .env)
-        //          subDir = "core_pdfs"
-        // We want "core_academic_search/core_pdfs/some_file.pdf"
-        if (!absoluteServerPath) return null;
-        const parts = absoluteServerPath.split(/[\\/]/); // Split by / or \
-        const fileName = parts.pop();
-        const subDirInPath = parts.pop();
-        const baseDirInPath = parts.pop();
-
-        if (baseDirInPath === baseOutputDirName && subDirInPath === subDir) {
-            return `${baseOutputDirName}/${subDir}/${fileName}`;
-        }
-        // Fallback if path structure is unexpected, might need more robust parsing or better data from backend
-        console.warn("Could not reliably construct relative path for download:", absoluteServerPath);
-        return null; 
-    };
-
 
     return (
-        <div className="academic-search-tool">
-            <h2>Academic Paper Search</h2>
+        <div className="academic-search-tool tool-form-container">
+            <h3 className="tool-title">Academic Paper Search</h3>
             <form onSubmit={handleSearch}>
-                <div>
-                    <label htmlFor="query">Search Query:</label>
-                    <input
-                        type="text"
-                        id="query"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        placeholder="e.g., machine learning applications"
-                        required
-                    />
-                </div>
-
-                <div>
-                    <label htmlFor="searchSource">Source:</label>
-                    <select
-                        id="searchSource"
-                        value={searchSource}
-                        onChange={(e) => setSearchSource(e.target.value)}
-                    >
+                <div className="form-group">
+                    <label htmlFor="searchSource">Search Source:</label>
+                    <select id="searchSource" value={searchSource} onChange={(e) => setSearchSource(e.target.value)} disabled={isLoading}>
                         <option value="combined">Combined (OpenAlex & Scholar)</option>
                         <option value="core">CORE Repository</option>
                     </select>
                 </div>
 
+                <div className="form-group">
+                    <label htmlFor="query">Search Query:</label>
+                    <input type="text" id="query" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="e.g., applications of transformers in NLP" required disabled={isLoading} />
+                </div>
+
+                {/* --- Conditional UI for CORE Search --- */}
                 {searchSource === 'core' && (
-                    <>
-                        <div>
-                            <label htmlFor="maxPagesCore">Max Pages (CORE):</label>
-                            <input
-                                type="number" id="maxPagesCore" value={maxPagesCore}
-                                min="1" onChange={(e) => setMaxPagesCore(e.target.value)}
-                            />
+                    <div className="source-options">
+                        <h4>CORE Options</h4>
+                        <div className="form-group">
+                            <label htmlFor="coreApiKey">CORE API Key:</label>
+                            <input type="password" id="coreApiKey" value={coreApiKey} onChange={(e) => setCoreApiKey(e.target.value)} placeholder="Enter your CORE API key" required={searchSource === 'core'} disabled={isLoading} />
                         </div>
-                        <div>
-                            <label htmlFor="downloadPdfsCore">Download PDFs (CORE):</label>
-                            <input
-                                type="checkbox" id="downloadPdfsCore"
-                                checked={downloadPdfsCore} onChange={(e) => setDownloadPdfsCore(e.target.checked)}
-                            />
+                        <div className="form-group">
+                            <label htmlFor="maxPagesCore">Max Pages:</label>
+                            <input type="number" id="maxPagesCore" value={maxPagesCore} min="1" onChange={(e) => setMaxPagesCore(e.target.value)} disabled={isLoading} />
                         </div>
-                    </>
+                        <div className="form-group form-group-checkbox">
+                            <label htmlFor="downloadPdfsCore">Download PDFs if available</label>
+                            <input type="checkbox" id="downloadPdfsCore" checked={downloadPdfsCore} onChange={(e) => setDownloadPdfsCore(e.target.checked)} disabled={isLoading} />
+                        </div>
+                    </div>
                 )}
 
+                {/* --- Conditional UI for Combined Search --- */}
                 {searchSource === 'combined' && (
-                    <>
-                        <div>
-                            <label htmlFor="minYearCombined">Min. Year (Optional):</label>
-                            <input
-                                type="number" id="minYearCombined" placeholder="e.g., 2022"
-                                value={minYear} onChange={(e) => setMinYear(e.target.value)}
-                            />
+                    <div className="source-options">
+                        <h4>Combined Search Options</h4>
+                        <div className="form-group">
+                            <label htmlFor="minYear">Minimum Year:</label>
+                            <input type="number" id="minYear" value={minYear} onChange={(e) => setMinYear(e.target.value)} placeholder="e.g., 2020" disabled={isLoading} />
                         </div>
-                         <div>
-                            <label htmlFor="openAlexMax">OpenAlex Max:</label>
-                            <input type="number" id="openAlexMax" value={openAlexMax} min="1" onChange={(e) => setOpenAlexMax(e.target.value)} />
+                        <div className="form-group">
+                            <label htmlFor="openAlexMax">Max OpenAlex Results:</label>
+                            <input type="number" id="openAlexMax" value={openAlexMax} min="1" onChange={(e) => setOpenAlexMax(e.target.value)} disabled={isLoading} />
                         </div>
-                        <div>
-                            <label htmlFor="scholarMax">Scholar Max:</label>
-                            <input type="number" id="scholarMax" value={scholarMax} min="1" onChange={(e) => setScholarMax(e.target.value)} />
+                        <div className="form-group">
+                            <label htmlFor="scholarMax">Max Scholar Results:</label>
+                            <input type="number" id="scholarMax" value={scholarMax} min="1" onChange={(e) => setScholarMax(e.target.value)} disabled={isLoading} />
                         </div>
-                    </>
+                    </div>
                 )}
-
-                <button type="submit" disabled={isLoading} style={{ marginTop: '15px' }}>
+                
+                <button type="submit" disabled={isLoading || !query.trim()} style={{ marginTop: '20px' }}>
                     {isLoading ? 'Searching...' : 'Search'}
                 </button>
             </form>
 
-            {error && <p className="error-message">{error}</p>}
+            {error && !isLoading && <p className="error-message">{error}</p>}
 
-            {results && (
+            {results && !isLoading && (
                 <div className="results-section">
-                    <h3>{results.message || `Found ${results.results_count || 0} results`}</h3>
-                    {results.output_directory && <p className="info-message"><small>Output (metadata CSV) saved in backend at: {results.output_directory}</small></p>}
-                    
+                    <h4>{results.message}</h4>
                     {results.data && results.data.length > 0 ? (
-                        <ul>
-                            {results.data.map((item, index) => {
-                                // For CORE PDF downloads, construct the relative path for getProxiedFileDownloadUrl
-                                let pdfDownloadLink = null;
-                                if (item.source === 'CORE' && item.local_filename && downloadPdfsCore) {
-                                    // Assuming item.local_filename is an absolute path on the server like:
-                                    // D:\Chatbot-main\server\data_outputs\core_academic_search\core_pdfs\1_0_SomeTitle.pdf
-                                    // We need to make it relative to OUTPUT_BASE_DIR for the proxy.
-                                    // This requires knowing the structure. A better way is for Python to return this relative path.
-                                    // For now, a heuristic:
-                                    const relativePath = getRelativePathForDownload(item.local_filename, "core_academic_search", "core_pdfs");
-                                    if (relativePath) {
-                                        pdfDownloadLink = getProxiedFileDownloadUrl(relativePath);
-                                    }
-                                }
-
-                                return (
-                                    <li key={item.title + index + item.source} className="result-item">
-                                        <h4>{item.title || 'No Title'}</h4>
-                                        <p><strong>Source:</strong> {item.source || 'N/A'}</p>
-                                        {item.year && !String(item.year).toLowerCase().includes('nan') && <p><strong>Year:</strong> {item.year}</p>}
-                                        {item.citations !== undefined && <p><strong>Citations:</strong> {item.citations}</p>}
-                                        <p className="abstract"><strong>Abstract:</strong> {item.abstract ? item.abstract.substring(0, 300) + '...' : 'N/A'}</p>
-                                        {pdfDownloadLink && (
-                                            <a
-                                                href={pdfDownloadLink}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                download // Suggests download to browser
-                                            >
-                                                Download PDF (from CORE)
-                                            </a>
-                                        )}
-                                    </li>
-                                );
-                            })}
+                        <ul className="result-list">
+                            {results.data.map((item, index) => (
+                                <li key={`${item.title}-${index}`} className="result-item">
+                                    <h5>{item.title || 'No Title'}</h5>
+                                    <p className="result-meta">
+                                        <strong>Source:</strong> {item.source || 'N/A'}
+                                        {item.year && !String(item.year).toLowerCase().includes('nan') && <span> | <strong>Year:</strong> {parseInt(item.year)}</span>}
+                                        {item.citations !== undefined && <span> | <strong>Citations:</strong> {item.citations}</span>}
+                                    </p>
+                                    <p className="abstract">{item.abstract ? item.abstract.substring(0, 300) + '...' : 'No abstract available.'}</p>
+                                </li>
+                            ))}
                         </ul>
                     ) : (
-                        !isLoading && <p className="info-message">No papers found matching your criteria.</p>
+                        !error && <p>No papers found matching your criteria.</p>
                     )}
                 </div>
             )}
@@ -211,36 +172,4 @@ const AcademicSearchTool = () => {
     );
 };
 
-export default AcademicSearchTool;
-
-// client/src/components/tools/AcademicSearchToolContent.js
-// import React from 'react';
-
-// const AcademicSearchToolContent = ({ onResults, initialData }) => {
-//     const handleDummyAction = () => {
-//         // Simulate getting some results and calling the callback
-//         console.log("AcademicSearchToolContent: Dummy action triggered.");
-//         if (onResults) {
-//             onResults({ 
-//                 tool: 'academicSearch', 
-//                 query: 'test query', 
-//                 count: 2, 
-//                 topItems: [
-//                     { title: 'Dummy Paper 1', source: 'Test Source', year: '2024' },
-//                     { title: 'Dummy Paper 2', source: 'Test Source', year: '2023' }
-//                 ],
-//                 error: null 
-//             });
-//         }
-//     };
-
-//     return (
-//         <div className="tool-content-panel">
-//             <h3>Academic Search (Placeholder)</h3>
-//             <p>Academic search tool content will go here.</p>
-//             <p>Initial Data (if any): {JSON.stringify(initialData)}</p>
-//             <button onClick={handleDummyAction}>Simulate Search & Post to Chat</button>
-//         </div>
-//     );
-// };
-// export default AcademicSearchToolContent;
+export default AcademicSearchToolContent;

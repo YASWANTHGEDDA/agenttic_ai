@@ -1,7 +1,7 @@
 // client/src/components/tools/OcrToolContent.js
 import React, { useState, useEffect } from 'react';
-import { ocrPdfWithTesseract, ocrPdfWithNougat, getProxiedFileDownloadUrl } from '../../services/api'; // Adjust path if needed
-// import './OcrTool.css'; // Create this CSS file for styling
+import { ocrPdfWithTesseract, ocrPdfWithNougat, getProxiedFileDownloadUrl } from '../../services/api';
+import './OcrTool.css'; // Create this CSS file for styling
 
 const OcrToolContent = ({ onOcrComplete, initialData }) => {
     const [selectedFile, setSelectedFile] = useState(null);
@@ -9,13 +9,11 @@ const OcrToolContent = ({ onOcrComplete, initialData }) => {
     const [ocrEngine, setOcrEngine] = useState('tesseract'); // 'tesseract' or 'nougat'
     
     // State to store the direct API response for display within this panel
-    // { message, markdown_file (server path), download_link (relative for proxy), content_preview, error }
     const [panelOcrResult, setPanelOcrResult] = useState(null); 
     
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // Reset state if initialData changes (though less common for this tool)
     useEffect(() => {
         setSelectedFile(null);
         setSelectedFileName('');
@@ -62,16 +60,17 @@ const OcrToolContent = ({ onOcrComplete, initialData }) => {
             console.log(`OCR Tool: API Response from ${ocrEngine}:`, response);
             setPanelOcrResult(response); // Store full response for panel display
 
-            // Pass structured data back to ChatPage
+            // Extract the first server path and download link for the parent component
+            const serverPath = response.files_server_paths?.[0] || null;
+            const relativeLink = response.download_links_relative?.[0] || null;
+
+            // Pass structured data back to the parent (e.g., ChatPage)
             onOcrComplete({
                 engine: ocrEngine,
                 original_filename: selectedFile.name,
                 message: response.message,
-                markdown_file_server_path: response.markdown_file, // Server path for reference
-                // download_link_relative is the path part for getProxiedFileDownloadUrl
-                // e.g., "ocr_tesseract_output/filename.md"
-                download_link_relative: response.download_link?.replace('/files/', ''), 
-                content_preview: response.content_preview,
+                markdown_file_server_path: serverPath,
+                download_link_relative: relativeLink,
                 error: null
             });
 
@@ -93,6 +92,7 @@ const OcrToolContent = ({ onOcrComplete, initialData }) => {
     return (
         <div className="tool-content-panel ocr-tool-content">
             <h3>PDF OCR Tool</h3>
+            <p>Convert an image-based PDF into a Markdown text file.</p>
             <form onSubmit={handleSubmit}>
                 <div className="form-group">
                     <label htmlFor="ocrPdfFile">Select PDF:</label>
@@ -118,37 +118,26 @@ const OcrToolContent = ({ onOcrComplete, initialData }) => {
                     </select>
                 </div>
                 <button type="submit" disabled={isLoading || !selectedFile} style={{ marginTop: '10px' }}>
-                    {isLoading ? `Processing with ${ocrEngine}...` : `Run OCR with ${ocrEngine}`}
+                    {isLoading ? `Processing with ${ocrEngine}...` : `Run OCR`}
                 </button>
             </form>
 
             {error && <p className="error-message">{error}</p>}
 
-            {panelOcrResult && !error && ( // Show results in panel only if no major error during API call
+            {panelOcrResult && !error && (
                 <div className="results-section" style={{marginTop: '20px'}}>
-                    <h4>Panel OCR Result: {panelOcrResult.message}</h4>
-                    {panelOcrResult.download_link_relative && panelOcrResult.markdown_file_server_path && (
+                    <h4>Result: {panelOcrResult.message}</h4>
+                    {panelOcrResult.download_links_relative?.[0] && panelOcrResult.files_server_paths?.[0] && (
                         <p>
                             <a 
-                                href={getProxiedFileDownloadUrl(panelOcrResult.download_link_relative)} 
-                                download={panelOcrResult.markdown_file_server_path.split(/[\\/]/).pop()} // Suggest filename
+                                href={getProxiedFileDownloadUrl(panelOcrResult.download_links_relative[0])} 
+                                download={panelOcrResult.files_server_paths[0].split(/[\\/]/).pop()}
                                 target="_blank" rel="noopener noreferrer"
                                 title={`Download OCR output for ${selectedFileName}`}
                             >
-                                Download Markdown File ({panelOcrResult.markdown_file_server_path.split(/[\\/]/).pop()})
+                                Download Markdown File
                             </a>
                         </p>
-                    )}
-                    {panelOcrResult.content_preview && (
-                        <div>
-                            <h5>Content Preview (first 1000 chars):</h5>
-                            <pre className="ocr-preview-box">
-                                {panelOcrResult.content_preview}
-                            </pre>
-                        </div>
-                    )}
-                     {!panelOcrResult.download_link_relative && !panelOcrResult.content_preview && panelOcrResult.message && (
-                        <p>OCR process completed. {panelOcrResult.message.includes("successful") ? "Output might be available on server." : "No downloadable content."}</p>
                     )}
                 </div>
             )}

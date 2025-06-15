@@ -4,41 +4,42 @@ import { downloadYouTubeMedia, getProxiedFileDownloadUrl } from '../../services/
 import './YouTubeDownloaderTool.css'; // Create this CSS file
 
 const YouTubeDownloaderToolContent = ({ onMediaDownloaded = () => {}, initialData }) => {
-    console.log('YouTubeDownloaderToolContent received onMediaDownloaded:', typeof onMediaDownloaded);
     const [youtubeUrl, setYoutubeUrl] = useState(initialData?.url || '');
-    const [qualityProfile, setQualityProfile] = useState(initialData?.quality || '720p'); // '720p', '1080p', 'audio_mp3', 'audio_best', 'best'
+    const [qualityProfile, setQualityProfile] = useState(initialData?.quality || '720p');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
-    const [downloadedMediaInfo, setDownloadedMediaInfo] = useState(null); // { message, files, download_links }
+    const [downloadResult, setDownloadResult] = useState(null); // API response: { message, files_server_paths, download_links_relative }
 
     useEffect(() => {
         setYoutubeUrl(initialData?.url || '');
         setQualityProfile(initialData?.quality || '720p');
-        setDownloadedMediaInfo(null);
+        setDownloadResult(null);
         setError('');
     }, [initialData]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const urlPattern = /^(https|http):\/\/(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})|^https?:\/\/youtu\.be\/([a-zA-Z0-9_-]{11})/;
+        const urlPattern = /^(?:https?:\/\/)?(?:www\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})(?:\S+)?$/;
         if (!youtubeUrl.trim() || !urlPattern.test(youtubeUrl.trim())) {
-            setError('Please enter a valid YouTube video URL.');
+            setError('Please enter a valid YouTube video or playlist URL.');
             return;
         }
         setIsLoading(true);
         setError('');
-        setDownloadedMediaInfo(null);
+        setDownloadResult(null);
 
         try {
             const response = await downloadYouTubeMedia(youtubeUrl.trim(), qualityProfile);
-            setDownloadedMediaInfo(response);
+            setDownloadResult(response);
             onMediaDownloaded({
                 original_url: youtubeUrl.trim(),
                 quality: qualityProfile,
-                downloaded_count: response.files?.length || 0,
-                files_with_links: response.files?.map((serverPath, index) => ({
+                downloaded_count: response.files_server_paths?.length || 0,
+                files_with_links: response.files_server_paths?.map((serverPath, index) => ({
                     name: serverPath.split(/[\\/]/).pop(),
-                    link: response.download_links?.[index] ? getProxiedFileDownloadUrl(response.download_links[index].replace('/files/', '')) : '#'
+                    link: response.download_links_relative?.[index] 
+                        ? getProxiedFileDownloadUrl(response.download_links_relative[index]) 
+                        : '#'
                 })) || [],
                 error: null
             });
@@ -46,7 +47,7 @@ const YouTubeDownloaderToolContent = ({ onMediaDownloaded = () => {}, initialDat
             console.error("YouTube download error:", err);
             const errorMessage = err.message || 'Failed to download YouTube media.';
             setError(errorMessage);
-            setDownloadedMediaInfo({ message: errorMessage, files: [], download_links: [] });
+            setDownloadResult({ message: errorMessage, files_server_paths: [], download_links_relative: [] });
             onMediaDownloaded({ original_url: youtubeUrl.trim(), quality: qualityProfile, error: errorMessage });
         } finally {
             setIsLoading(false);
@@ -56,9 +57,10 @@ const YouTubeDownloaderToolContent = ({ onMediaDownloaded = () => {}, initialDat
     return (
         <div className="tool-content-panel youtube-downloader-tool">
             <h3>YouTube Downloader</h3>
+            <p>Download a YouTube video or an entire playlist.</p>
             <form onSubmit={handleSubmit}>
                 <div className="form-group">
-                    <label htmlFor="youtubeUrl">YouTube Video URL:</label>
+                    <label htmlFor="youtubeUrl">YouTube URL (Video or Playlist):</label>
                     <input
                         type="url"
                         id="youtubeUrl"
@@ -66,6 +68,7 @@ const YouTubeDownloaderToolContent = ({ onMediaDownloaded = () => {}, initialDat
                         onChange={(e) => setYoutubeUrl(e.target.value)}
                         placeholder="e.g., https://www.youtube.com/watch?v=dQw4w9WgXcQ"
                         required
+                        disabled={isLoading}
                     />
                 </div>
                 <div className="form-group">
@@ -74,6 +77,7 @@ const YouTubeDownloaderToolContent = ({ onMediaDownloaded = () => {}, initialDat
                         id="qualityProfile" 
                         value={qualityProfile} 
                         onChange={(e) => setQualityProfile(e.target.value)}
+                        disabled={isLoading}
                     >
                         <option value="best">Best Available (Video+Audio MP4)</option>
                         <option value="1080p">1080p (MP4)</option>
@@ -87,17 +91,17 @@ const YouTubeDownloaderToolContent = ({ onMediaDownloaded = () => {}, initialDat
                 </button>
             </form>
             {error && <p className="error-message">{error}</p>}
-            {downloadedMediaInfo && (
+            {downloadResult && (
                 <div className="results-section" style={{marginTop: '15px'}}>
-                    <h4>Download Results: {downloadedMediaInfo.message}</h4>
-                    {downloadedMediaInfo.files && downloadedMediaInfo.files.length > 0 && (
+                    <h4>Result: {downloadResult.message}</h4>
+                    {downloadResult.files_server_paths && downloadResult.files_server_paths.length > 0 && (
                         <>
-                            <p>Successfully processed: {downloadedMediaInfo.files.length} file(s).</p>
+                            <p>Successfully processed: {downloadResult.files_server_paths.length} file(s).</p>
                             <ul>
-                                {downloadedMediaInfo.files.map((filepath, index) => {
+                                {downloadResult.files_server_paths.map((filepath, index) => {
                                     const filename = filepath.split(/[\\/]/).pop();
-                                    const downloadLink = downloadedMediaInfo.download_links?.[index]
-                                        ? getProxiedFileDownloadUrl(downloadedMediaInfo.download_links[index].replace('/files/', ''))
+                                    const downloadLink = downloadResult.download_links_relative?.[index]
+                                        ? getProxiedFileDownloadUrl(downloadResult.download_links_relative[index])
                                         : null;
                                     return (
                                         <li key={index}>

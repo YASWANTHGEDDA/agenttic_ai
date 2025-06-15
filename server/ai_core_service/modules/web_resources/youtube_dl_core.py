@@ -20,7 +20,7 @@ def is_playlist_yt(url):
         with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': 'in_playlist'}) as ydl:
             info = ydl.extract_info(url, download=False)
             # 'entries' existing and being non-empty indicates a playlist
-            return 'entries' in info and info['entries'] 
+            return 'entries' in info and info['entries']
     except yt_dlp.utils.DownloadError as e:
         # Handle cases like "is not a valid URL" or "Unsupported URL"
         print(f"Could not determine if URL is a playlist (may be invalid or unsupported): {e}")
@@ -30,7 +30,7 @@ def is_playlist_yt(url):
         return False # Default to not a playlist on other errors
 
 def _yt_progress_hook(d, progress_callback_func=None):
-    """Internal progress hook for yt_dlp."""
+    """Internal progress hook for yt_dlp, with more detailed console logging."""
     if progress_callback_func:
         progress_callback_func(d) # Pass the whole dict for flexibility
     else: # Default console logging if no callback
@@ -39,13 +39,14 @@ def _yt_progress_hook(d, progress_callback_func=None):
             # Sanitize title from info_dict if available for cleaner display
             title_display = d.get('info_dict', {}).get('title', os.path.basename(filename))
             
-            p = d.get('_percent_str', '0.0%')
-            speed = d.get('_speed_str', 'N/A')
-            eta = d.get('_eta_str', 'N/A')
-            total_bytes_str = d.get('_total_bytes_str', d.get('_total_bytes_estimate_str', 'N/A'))
+            p = d.get('_percent_str', '0.0%').strip()
+            speed = d.get('_speed_str', 'N/A').strip()
+            eta = d.get('_eta_str', 'N/A').strip()
+            total_bytes_str = d.get('_total_bytes_str', d.get('_total_bytes_estimate_str', 'N/A')).strip()
             
-            # Limit title display length
-            print(f"Downloading {title_display[:50]}...: {p} of {total_bytes_str} at {speed}, ETA: {eta}")
+            # More detailed progress string inspired by CLI tools
+            progress_str = f"[download] {p} of {total_bytes_str} at {speed}, ETA: {eta}"
+            print(f"Downloading {title_display[:50]}... {progress_str}")
         elif d['status'] == 'finished':
             filename = d.get('filename', 'Unknown file')
             title_display = d.get('info_dict', {}).get('title', os.path.basename(filename))
@@ -56,7 +57,7 @@ def _yt_progress_hook(d, progress_callback_func=None):
             print(f"Error downloading: {title_display[:50]}")
 
 
-def download_youtube_media(url, quality_profile, output_path, 
+def download_youtube_media(url, quality_profile, output_path,
                            is_playlist_override=None, progress_callback_func=None):
     """
     Downloads a YouTube video or playlist.
@@ -65,7 +66,7 @@ def download_youtube_media(url, quality_profile, output_path,
         url (str): The YouTube URL (video or playlist).
         quality_profile (str): Desired quality (e.g., "720p", "1080p", "best", "audio_mp3", "audio_best").
         output_path (str): Directory to save downloaded files.
-        is_playlist_override (bool, optional): Manually specify if URL is a playlist. 
+        is_playlist_override (bool, optional): Manually specify if URL is a playlist.
                                               If None, auto-detects.
         progress_callback_func (function, optional): A function to call with progress updates.
                                                      It will receive the yt_dlp progress dict.
@@ -92,6 +93,8 @@ def download_youtube_media(url, quality_profile, output_path,
     ydl_opts = {
         'outtmpl': outtmpl,
         'ignoreerrors': True, # Continue on download errors for individual items in a playlist
+        'continue': True, # Continue downloads. Do not redownload fragments of completed files.
+        'ignore_no_formats_error': True, # Skip if no formats are available for a video
         'noprogress': True if progress_callback_func else False, # Disable default progress if custom cb used
         'quiet': True if progress_callback_func else False, # Disable console output if custom cb used
         'progress_hooks': [lambda d: _yt_progress_hook(d, progress_callback_func)] if progress_callback_func else [_yt_progress_hook],
@@ -140,13 +143,16 @@ def download_youtube_media(url, quality_profile, output_path,
             print(f"Starting download for URL: {url} with quality: {quality_profile}")
             # The extract_info call with download=True triggers the download
             # and returns metadata about the downloaded item(s).
-            meta = ydl.extract_info(url, download=True) 
+            meta = ydl.extract_info(url, download=True)
 
             if meta:
-                if 'entries' in meta: # Playlist
+                # The 'entries' key exists for playlists, even if 'noplaylist' is False (it just processes the first video)
+                # To get all paths, we check if the original URL was a playlist.
+                if is_playlist_actual and 'entries' in meta:
                     for entry in meta['entries']:
-                        if entry and entry.get('filepath'): # yt-dlp v2023.07.06+ adds 'filepath'
-                             downloaded_file_paths.append(entry['filepath'])
+                        # On error, entry can be None
+                        if entry and entry.get('filepath'):
+                            downloaded_file_paths.append(entry['filepath'])
                         elif entry and entry.get('requested_downloads'): # Older yt-dlp
                             for dl_info in entry['requested_downloads']:
                                 downloaded_file_paths.append(dl_info['filepath'])
@@ -156,20 +162,18 @@ def download_youtube_media(url, quality_profile, output_path,
                     elif meta.get('requested_downloads'):
                          for dl_info in meta['requested_downloads']:
                                 downloaded_file_paths.append(dl_info['filepath'])
-                                
+
             if downloaded_file_paths:
                  print(f"Download process complete. Files: {downloaded_file_paths}")
             else:
                  # This can happen if ignoreerrors is True and all items failed
                  print(f"Download process finished, but no files seem to have been successfully downloaded for {url}.")
-                 # Check stderr from ydl if possible, or rely on progress hooks for error status.
                  if 'LoudNorm' in str(meta) and not check_ffmpeg_yt(): # Common issue
                      print("A 'LoudNorm' related step might have failed due to missing FFmpeg. Audio quality might be affected or post-processing skipped.")
-
 
     except yt_dlp.utils.DownloadError as e:
         print(f"A download error occurred with yt-dlp for URL '{url}': {e}")
     except Exception as e:
         print(f"An unexpected error occurred during YouTube download for '{url}': {e}")
-    
+
     return downloaded_file_paths

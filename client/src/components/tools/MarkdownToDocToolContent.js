@@ -15,7 +15,7 @@ This is some sample content for the selected key.
 More notes here.`
     );
     const [filename, setFilename] = useState('MyGeneratedDocument.docx');
-    const [contentKey, setContentKey] = useState('author_notes'); // Default or from a select dropdown
+    const [contentKey, setContentKey] = useState('text_content'); // Default to the most common key
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const [apiResult, setApiResult] = useState(null);
@@ -34,72 +34,64 @@ More notes here.`
         setError('');
         setApiResult(null);
 
-        // --- START: Robust filename and input handling ---
-        const currentFilename = String(filename || '').trim(); // Ensure filename is a string and trim
-        const currentMarkdown = String(markdown || '').trim(); // Ensure markdown is a string and trim
+        const currentFilename = String(filename || '').trim();
+        const currentMarkdown = String(markdown || '').trim();
 
         if (!currentMarkdown) {
             setError('Markdown content cannot be empty.');
             return;
         }
-        if (!currentFilename) {
-            setError('Output filename cannot be empty.');
+        if (!currentFilename || !currentFilename.toLowerCase().endsWith('.docx')) {
+            setError('Filename must be provided and end with .docx');
             return;
         }
-        if (!currentFilename.toLowerCase().endsWith('.docx')) {
-            setError('Filename must end with .docx');
-            return;
-        }
-        // Ensure contentKey is valid
         if (!contentKey) {
             setError('Please select a Content Key for the DOCX.');
             return;
         }
-        // --- END: Robust filename and input handling ---
-
+        
         setIsLoading(true);
 
         try {
-            // Pass the validated and trimmed filename
+            // The service already returns the data object, so `response` IS the data.
             const response = await createDocumentFromMarkdown(currentMarkdown, contentKey, currentFilename);
-            console.log('MarkdownToDocToolContent: API Response data:', response.data);
-            setApiResult(response.data);
+            
+            // CHANGE 1: Log the response object directly
+            console.log('MarkdownToDocToolContent: API Response received:', response);
+            
+            // CHANGE 2: Set state with the direct response
+            setApiResult(response);
 
-            if (response.data && response.data.status === 'success' &&
-                response.data.download_links_relative && response.data.download_links_relative.length > 0) {
-                
-                const relativePath = response.data.download_links_relative[0];
+            // CHANGE 3: Check conditions on the `response` object itself
+            if (response && response.status === 'success' && response.download_links_relative?.[0]) {
+                const relativePath = response.download_links_relative[0];
                 const downloadUrl = getProxiedFileDownloadUrl(relativePath);
-                const actualFilenameFromServer = response.data.filename || currentFilename;
+                const actualFilenameFromServer = response.files_server_paths?.[0]?.split(/[\\/]/).pop() || currentFilename;
 
                 if (downloadUrl) {
                     triggerDownload(downloadUrl, actualFilenameFromServer);
                 } else {
                     setError('DOCX generated, but an issue occurred with the download link.');
                 }
-            } else if (response.data && response.data.error) {
-                setError(response.data.error + (response.data.details ? ` Details: ${response.data.details}` : ''));
+            } else if (response && response.error) {
+                setError(response.error + (response.details ? ` Details: ${response.details}` : ''));
             } else {
-                setError('Failed to generate DOCX or get a valid download link.');
+                setError('Failed to generate DOCX or get a valid download link from the server.');
+                console.warn("Server response was missing expected success data:", response);
             }
 
+            // CHANGE 4: Pass the direct response to the parent callback
             if (onDocGenerated) {
-                onDocGenerated(response.data);
+                onDocGenerated(response);
             }
 
-        } catch (err) { // This is where your screenshot showed the error being caught
-            console.error("MarkdownToDocToolContent.js: DOCX creation error:", err);
-            // The 'err' object itself IS the error. err.message gives the "Cannot read..." part.
+        } catch (err) {
+            console.error("MarkdownToDocToolContent.js handleSubmit error:", err);
             setError(err.message || 'Failed to create document.');
-            
-            const errorForParent = { 
-                status: 'error', 
-                error: err.message || 'Failed to create document.' 
-                // You might not have err.response.data.details if the error is client-side like this TypeError
-            };
-            setApiResult(errorForParent);
+            const errorResponse = { status: 'error', error: err.message };
+            setApiResult(errorResponse);
             if (onDocGenerated) {
-                onDocGenerated(errorForParent);
+                onDocGenerated(errorResponse);
             }
         } finally {
             setIsLoading(false);
@@ -107,11 +99,12 @@ More notes here.`
     };
 
     return (
-        <div className="markdown-to-doc-tool tool-form-container"> {/* Add your specific class if needed */}
+        <div className="markdown-to-doc-tool tool-form-container">
             <h3 className="tool-title">Markdown to DOCX</h3>
+            <p>Generate a DOCX file from Markdown, extracting content based on a specific key.</p>
             <form onSubmit={handleSubmit}>
                 <div className="form-group">
-                    <label htmlFor="docFilename">Output Filename (.docx):</label>
+                    <label htmlFor="docFilename">Output Filename:</label>
                     <input
                         type="text"
                         id="docFilename"
@@ -123,7 +116,7 @@ More notes here.`
                     />
                 </div>
                 <div className="form-group">
-                    <label htmlFor="docContentKey">Content Key for DOCX:</label>
+                    <label htmlFor="docContentKey">Content Key to Extract:</label>
                     <select
                         id="docContentKey"
                         value={contentKey}
@@ -160,31 +153,22 @@ More notes here.`
                 <div className="error-message" style={{marginTop: '15px'}}>Error: {error}</div>
             )}
 
-            {!isLoading && apiResult && (
+            {!isLoading && apiResult && apiResult.status === 'success' && (
                 <div className="results-section" style={{ marginTop: '15px' }}>
-                    {apiResult.status === 'success' ? (
-                        <>
-                            <h4 className="results-title">{apiResult.message || "Document generated successfully!"}</h4>
-                            {apiResult.download_links_relative && apiResult.download_links_relative.length > 0 && (
-                                <p>
-                                    If download didn't start:
-                                    <a
-                                        href={getProxiedFileDownloadUrl(apiResult.download_links_relative[0])}
-                                        download={apiResult.filename || filename}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        style={{ marginLeft: '5px', fontWeight: 'bold' }}
-                                    >
-                                        Download {apiResult.filename || filename}
-                                    </a>
-                                </p>
-                            )}
-                        </>
-                    ) : apiResult.error && (
-                        <div className="error-message">
-                            Generation Failed: {apiResult.error}
-                            {apiResult.details && <><br />Details: {apiResult.details}</>}
-                        </div>
+                    <h4 className="results-title">{apiResult.message || "Document generated successfully!"}</h4>
+                    {apiResult.download_links_relative?.[0] && (
+                        <p>
+                            If your download didn't start, you can
+                            <a
+                                href={getProxiedFileDownloadUrl(apiResult.download_links_relative[0])}
+                                download={apiResult.files_server_paths?.[0]?.split(/[\\/]/).pop() || filename}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ marginLeft: '5px', fontWeight: 'bold' }}
+                            >
+                                download it here.
+                            </a>
+                        </p>
                     )}
                 </div>
             )}

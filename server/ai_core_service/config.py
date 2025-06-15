@@ -22,6 +22,8 @@ DEFAULT_INDEX_USER_ID = '__DEFAULT__'
 CHUNK_SIZE = int(os.getenv('CHUNK_SIZE', 512))
 CHUNK_OVERLAP = int(os.getenv('CHUNK_OVERLAP', 100))
 
+OLLAMA_URL = os.getenv("OLLAMA_BASE_URL", "http://172.180.9.187:11434")
+
 # --- API Configuration ---
 AI_CORE_SERVICE_PORT = int(os.getenv('AI_CORE_SERVICE_PORT', 5001))
 RAG_SERVICE_PORT = AI_CORE_SERVICE_PORT # Alias
@@ -63,6 +65,7 @@ if os.getenv('DEBUG_CONFIG', 'true').lower() == 'true': # Default to true for ea
     print(f"DEFAULT_ASSETS_DIR (for tool outputs): {DEFAULT_ASSETS_DIR}")
     print(f"FAISS_INDEX_DIR: {FAISS_INDEX_DIR}")
     print(f"AI_CORE_SERVICE_PORT: {AI_CORE_SERVICE_PORT}")
+    print(f"OLLAMA_URL: {OLLAMA_URL}")
     print(f"Tesseract CMD Path: {TESSERACT_CMD_PATH or 'Not Set (using system PATH)'}")
     print(f"Poppler Path: {POPPLER_PATH or 'Not Set (using system PATH)'}")
     print(f"Nougat CLI Path: {NOUGAT_CLI_PATH or 'Not Set (using system PATH)'}")
