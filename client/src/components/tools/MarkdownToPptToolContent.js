@@ -1,7 +1,7 @@
 // client/src/components/tools/MarkdownToPptToolContent.js
 import React, { useState } from 'react';
-import { createPresentationFromMarkdown, getProxiedFileDownloadUrl } from '../../services/api'; // Adjust path if needed
-import '../MarkdownToOfficeTool.css'; // Assuming this CSS file exists
+import { createPresentationFromMarkdown, getProxiedFileDownloadUrl } from '../../services/api';
+import '../MarkdownToOfficeTool.css';
 
 const MarkdownToPptToolContent = ({ onPptGenerated }) => {
     const [markdown, setMarkdown] = useState(
@@ -9,26 +9,13 @@ const MarkdownToPptToolContent = ({ onPptGenerated }) => {
 **Slide Text Content:**
 * Welcome to this presentation.
 * This slide introduces the main topic.
-    * Sub-point A
-    * Sub-point B
 
 ---
 ### Slide 2: Key Concepts
 **Slide Text Content:**
 * Concept 1: Explanation.
 * Concept 2: Further details.
-* **Important:** A bolded statement.
-
-**Image Prompt:** a futuristic cityscape (Note: Image prompt is a placeholder)
-
----
-### Slide 3: Conclusion
-**Slide Text Content:**
-* Summary of points.
-* Call to action.
-
-**Author Notes for Slide 3:**
-Remember to thank the audience.`
+`
     );
     const [filename, setFilename] = useState('MyGeneratedPresentation.pptx');
     const [isLoading, setIsLoading] = useState(false);
@@ -46,64 +33,72 @@ Remember to thank the audience.`
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        
+        // *** MOVED trimmedFilename DECLARATION HERE ***
+        const trimmedFilename = filename.trim(); // Define and trim here to use throughout
+
         if (!markdown.trim()) {
             setError('Markdown content cannot be empty.');
             return;
         }
-        const trimmedFilename = filename.trim();
-        if (!trimmedFilename.toLowerCase().endsWith('.pptx')) {
-            setError('Filename must end with .pptx');
+        // Use trimmedFilename for validation
+        if (!trimmedFilename || !trimmedFilename.toLowerCase().endsWith('.pptx')) { 
+            setError('Filename must be provided and end with .pptx');
             return;
         }
-        setFilename(trimmedFilename);
+        // No need to setFilename(trimmedFilename) here if filename state is already what's in the input
 
         setIsLoading(true);
         setError('');
         setApiResult(null);
 
         try {
-            // The `createPresentationFromMarkdown` service already returns the data object.
-            // So, 'response' here IS the data from the server.
-            const response = await createPresentationFromMarkdown(markdown, trimmedFilename);
-
-            // CHANGE 1: Log the response object directly.
+            // Use trimmedFilename when calling the API
+            const response = await createPresentationFromMarkdown(markdown, trimmedFilename); 
             console.log('MarkdownToPptTool: API Response received:', response);
-            
-            // CHANGE 2: Set the state with the response object directly.
             setApiResult(response);
 
-            // CHANGE 3: Check conditions on the `response` object itself.
-            if (response && response.status === 'success' && response.download_links_relative?.[0]) {
-                const relativePath = response.download_links_relative[0];
-                const downloadUrl = getProxiedFileDownloadUrl(relativePath);
-                
-                // Get the actual filename from the server if it exists, otherwise use the one from the input.
-                const actualFilenameFromServer = response.files_server_paths?.[0]?.split(/[\\/]/).pop() || trimmedFilename;
-
-                if (downloadUrl) {
-                    console.log(`Triggering auto-download for ${actualFilenameFromServer}`);
-                    triggerDownload(downloadUrl, actualFilenameFromServer);
+            if (response && response.status === 'success') {
+                if (response.download_link_relative) {
+                    const relativePath = response.download_link_relative;
+                    const downloadUrl = getProxiedFileDownloadUrl(relativePath); 
+                    
+                    if (downloadUrl && downloadUrl !== "#") { 
+                        // Use trimmedFilename as a fallback if server path is missing
+                        const actualFilenameFromServer = response.file_server_path?.split(/[\\/]/).pop() || trimmedFilename; 
+                        console.log(`Triggering auto-download for ${actualFilenameFromServer} from URL: ${downloadUrl}`);
+                        triggerDownload(downloadUrl, actualFilenameFromServer);
+                        setError(''); 
+                    } else {
+                        const msg = 'PPT generated, but the download link could not be constructed correctly by the frontend.';
+                        console.error(msg, "Relative path was:", relativePath, "Constructed URL was:", downloadUrl);
+                        setError(msg);
+                    }
                 } else {
-                    setError('PPT generated, but there was an issue creating the download link.');
+                    const msg = 'PPT generated successfully, but the backend did not provide a download link.';
+                    console.warn(msg, response);
+                    setError(msg); 
                 }
-            } else if (response && response.error) {
-                setError(response.error + (response.details ? ` Details: ${response.details}` : ''));
+            } else if (response && (response.error || response.status !== 'success')) {
+                const backendError = response.error || response.message || 'Failed to generate PPT (backend error).';
+                console.error("Backend reported an error:", backendError, response.details || '');
+                setError(backendError + (response.details ? ` Details: ${response.details}` : ''));
             } else {
-                setError('Failed to generate PPT or get a valid download link from the server.');
-                console.warn("Server response was missing expected success data:", response);
+                const msg = 'Failed to generate PPT: Invalid or unexpected response from the server.';
+                console.warn(msg, "Full response object:", response);
+                setError(msg);
             }
 
-            // CHANGE 4: Pass the direct response to the parent callback.
             if (onPptGenerated) {
                 onPptGenerated(response);
             }
 
         } catch (err) {
-            console.error("MarkdownToPptTool handleSubmit error:", err);
-            const message = err.message || 'Failed to create presentation.';
+            console.error("MarkdownToPptTool handleSubmit client-side/network error:", err);
+            const message = err.message || 'Failed to create presentation due to a client or network error.';
             setError(message);
-            const errorResponse = { status: 'error', error: message };
-            setApiResult(errorResponse);
+            const errorResponse = { status: 'error', error: message, details: err.toString() };
+            setApiResult(errorResponse); 
             if (onPptGenerated) {
                 onPptGenerated(errorResponse);
             }
@@ -122,8 +117,8 @@ Remember to thank the audience.`
                     <input
                         type="text"
                         id="pptFilename"
-                        value={filename}
-                        onChange={(e) => setFilename(e.target.value)}
+                        value={filename} // Still bound to filename state
+                        onChange={(e) => setFilename(e.target.value)} // Updates filename state
                         placeholder="MyPresentation.pptx"
                         required
                         disabled={isLoading}
@@ -153,32 +148,36 @@ Remember to thank the audience.`
                     <span>Generating your presentation...</span>
                 </div>
             )}
-
-            {/* Display general error if not loading and apiResult hasn't set its own error */}
+            
             {error && !isLoading && (
                  <div className="error-message" style={{marginTop: '15px'}}>
                     Error: {error}
                 </div>
             )}
 
-            {/* Display success message and a manual download link as a fallback */}
             {!isLoading && apiResult && apiResult.status === 'success' && (
                 <div className="results-section" style={{marginTop: '15px'}}>
                     <h4 className="results-title">{apiResult.message || "Presentation generated successfully!"}</h4>
-                    {apiResult.download_links_relative?.[0] && (
+                    {apiResult.download_link_relative && ( // Check if the link exists in the result
                         <p>
                             If your download didn't start, you can use this link:
                             <a
-                                href={getProxiedFileDownloadUrl(apiResult.download_links_relative[0])}
-                                download={apiResult.files_server_paths?.[0]?.split(/[\\/]/).pop() || filename}
+                                href={getProxiedFileDownloadUrl(apiResult.download_link_relative)}
+                                // Use apiResult.file_server_path or fallback to filename from state if needed
+                                download={apiResult.file_server_path?.split(/[\\/]/).pop() || filename} 
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 style={{ marginLeft: '5px', fontWeight: 'bold' }}
                             >
-                                Download {apiResult.files_server_paths?.[0]?.split(/[\\/]/).pop() || filename}
+                                Download {apiResult.file_server_path?.split(/[\\/]/).pop() || filename}
                             </a>
                         </p>
                     )}
+                </div>
+            )}
+             {!isLoading && apiResult && apiResult.status !== 'success' && apiResult.error && (
+                 <div className="error-message" style={{marginTop: '15px'}}>
+                    Error: {apiResult.error} {apiResult.details ? `(${apiResult.details})` : ''}
                 </div>
             )}
         </div>

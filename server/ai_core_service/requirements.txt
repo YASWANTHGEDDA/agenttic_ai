@@ -1,43 +1,42 @@
 # Core Web Framework & Server
-Flask
-Flask-CORS
-# waitress # Production WSGI server, consider using this or Gunicorn/Uvicorn
+Flask==3.0.2
+Flask-CORS==4.0.0
+waitress==3.0.0  # Production WSGI server
 
 # Configuration & Utilities
-python-dotenv
-uuid # Standard library, listed for explicitness if previously included
+python-dotenv==1.0.1
+uuid==1.30  # Standard library, listed for explicitness
 
 # AI - Langchain Ecosystem
-langchain
-langchain-community
-langchain-huggingface # For integrating HuggingFace models/embeddings with Langchain
-langchain-ollama      # For Ollama integration with Langchain
+langchain==0.1.12
+langchain-community==0.0.27
+langchain-huggingface==0.0.10
+langchain-ollama==0.0.3
 
 # AI - LLM & Embeddings Libraries
-ollama                # Direct Ollama client library
-sentence-transformers # For generating sentence embeddings (primary for RAG)
+ollama==0.1.6
+sentence-transformers==2.5.1
 
 # AI - Vector Store
-# Choose one of the FAISS packages based on your environment:
-faiss-cpu             # CPU version of FAISS
-# faiss-gpu           # GPU version of FAISS (requires CUDA)
+faiss-cpu==1.7.4  # CPU version of FAISS
 
 # Document Processing & Text Extraction
-pypdf                 # Modern PDF library, successor to PyPDF2
-PyPDF2                # Older PDF library, kept for compatibility if specific features were used
-pymupdf               # PyMuPDF (Fitz) for efficient PDF parsing
-python-docx           # For .docx (Word) files
-python-pptx           # For .pptx (PowerPoint) files
+pypdf==4.1.0
+PyPDF2==3.0.1
+pymupdf==1.23.26
+python-docx==1.1.0
+python-pptx==0.6.23
 
 # Tokenizers
-tiktoken              # Tokenizer used by OpenAI models, often useful with Langchain
+tiktoken==0.6.0
 
 # HTTP Client Libraries
-requests              # General purpose HTTP client
-httpx                 # Modern HTTP client, supports async
+requests==2.31.0
+httpx==0.27.0
 
-# ... other requirements ...
-google-generativeai
+# LLM Providers
+google-generativeai==0.3.2
+groq==0.4.2
 
-# ... other requirements ...
-groq
+# Logging and Monitoring
+logging==0.4.9.6
