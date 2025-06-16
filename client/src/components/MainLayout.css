@@ -1,0 +1,62 @@
+/* client/src/components/MainLayout.css */
+
+.app-container {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden; /* Main app container */
+}
+
+.main-content-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.main-header {
+    padding: 10px 20px;
+    background-color: #1e1e1e;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+    border-bottom: 1px solid #333;
+    color: #f0f0f0; /* Ensure header text is visible */
+}
+
+.main-header h2 {
+    margin: 0;
+    font-size: 1.5em;
+}
+
+.main-header span {
+    margin-right: 20px;
+}
+
+.main-header button {
+    padding: 8px 15px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background-color 0.2s ease;
+}
+
+.main-header button:hover {
+    background-color: #0056b3;
+}
+
+.main-content-view {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden; /* Ensure horizontal scroll is hidden unless explicitly needed by child */
+    background-color: #1a1a1a;
+}
+
+.loading-fallback {
+    padding: 20px;
+    text-align: center;
+    color: #ccc;
+} 

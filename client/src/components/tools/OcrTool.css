@@ -1,0 +1,112 @@
+/* client/src/components/tools/OcrTool.css */
+.ocr-tool-content {
+    padding: 15px;
+    font-size: 0.9rem;
+}
+
+.ocr-tool-content h3 {
+    margin-top: 0;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.ocr-tool-content .form-group {
+    margin-bottom: 15px;
+}
+
+.ocr-tool-content label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+
+.ocr-tool-content input[type="file"] {
+    display: block;
+    margin-top: 5px;
+    border: 1px solid #ccc;
+    padding: 8px;
+    border-radius: 4px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.ocr-tool-content .file-name-display {
+    font-size: 0.85em;
+    color: #555;
+    margin-top: 5px;
+    font-style: italic;
+}
+
+.ocr-tool-content select {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.ocr-tool-content button {
+    padding: 10px 15px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.ocr-tool-content button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.ocr-tool-content .results-section {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px dashed #ddd;
+}
+
+.ocr-tool-content .results-section h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1em;
+    color: #444;
+}
+.ocr-tool-content .results-section h5 {
+    margin-top: 15px;
+    margin-bottom: 5px;
+    font-size: 0.9em;
+    color: #555;
+}
+
+
+.ocr-tool-content .ocr-preview-box {
+    max-height: 250px;
+    overflow-y: auto;
+    border: 1px solid #eee;
+    padding: 10px;
+    background-color: #f8f9fa;
+    font-size: 0.85em;
+    white-space: pre-wrap; /* Allow wrapping of long lines */
+    word-break: break-all;
+}
+
+.ocr-tool-content .error-message {
+    color: #dc3545;
+    font-size: 0.9em;
+    margin-top: 10px;
+    padding: 8px;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+}
+
+.ocr-tool-content .results-section p a {
+    color: #0069d9;
+    text-decoration: none;
+    font-weight: bold;
+}
+.ocr-tool-content .results-section p a:hover {
+    text-decoration: underline;
+}

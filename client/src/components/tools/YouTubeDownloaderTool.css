@@ -1,0 +1,96 @@
+.youtube-downloader-tool {
+    padding: 20px;
+    margin: 0 auto;
+}
+
+.youtube-downloader-tool h3 {
+    color: #f0f0f0;
+    margin-bottom: 20px;
+}
+
+.youtube-downloader-tool form div {
+    margin-bottom: 15px;
+}
+
+.youtube-downloader-tool label {
+    display: block;
+    margin-bottom: 5px;
+    color: #e0e0e0;
+    font-weight: bold;
+}
+
+.youtube-downloader-tool input[type="url"],
+.youtube-downloader-tool select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    background-color: #333;
+    color: #fff;
+    box-sizing: border-box;
+}
+
+.youtube-downloader-tool input[type="url"]::placeholder {
+    color: #aaa;
+}
+
+.youtube-downloader-tool button {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.youtube-downloader-tool button:hover {
+    background-color: #0056b3;
+}
+
+.youtube-downloader-tool button:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+}
+
+.youtube-downloader-tool .error-message {
+    color: #ff6b6b;
+    margin-top: 15px;
+    font-weight: bold;
+}
+
+.youtube-downloader-tool .results-section {
+    background-color: #2a2a2a;
+    padding: 15px;
+    border-radius: 8px;
+    margin-top: 20px;
+}
+
+.youtube-downloader-tool .results-section h4 {
+    color: #f0f0f0;
+    margin-bottom: 10px;
+}
+
+.youtube-downloader-tool .results-section p {
+    color: #e0e0e0;
+    margin-bottom: 8px;
+}
+
+.youtube-downloader-tool .results-section ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+.youtube-downloader-tool .results-section li {
+    margin-bottom: 5px;
+    color: #c0c0c0;
+}
+
+.youtube-downloader-tool .results-section li a {
+    color: #8ab4f8;
+    text-decoration: none;
+}
+
+.youtube-downloader-tool .results-section li a:hover {
+    text-decoration: underline;
+} 

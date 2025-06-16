@@ -1,0 +1,53 @@
+/* client/src/components/Sidebar.css */
+.sidebar {
+  width: 60px; /* Or your desired width */
+  height: 100vh;
+  background-color: var(--sidebar-bg, #252d3a); /* Use CSS variable for theming */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 20px;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+  transition: width 0.3s ease; /* If you plan to make it collapsible */
+  position: fixed; /* Or absolute, depending on layout */
+  left: 0;
+  top: 0;
+  z-index: 1000; /* Ensure it's above other content */
+}
+
+.sidebar-button {
+  background-color: transparent;
+  border: none;
+  color: var(--sidebar-icon-color, #adb5bd); /* Use CSS variable */
+  padding: 12px; /* Adjust padding for button size */
+  margin-bottom: 10px;
+  cursor: pointer;
+  border-radius: 8px; /* Slightly rounded buttons */
+  width: 44px; /* Ensure button width */
+  height: 44px; /* Ensure button height */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem; /* Size of the character icon */
+  font-weight: bold;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.sidebar-button:hover {
+  background-color: var(--sidebar-icon-hover-bg, #343a40); /* Use CSS variable */
+  color: var(--sidebar-icon-hover-color, #f8f9fa); /* Use CSS variable */
+}
+
+.sidebar-button.active {
+  background-color: var(--sidebar-icon-active-bg, #007bff); /* Use CSS variable for accent color */
+  color: var(--sidebar-icon-active-color, #ffffff); /* Use CSS variable */
+}
+
+/* Optional: For bottom actions like theme toggle or logout */
+.sidebar-bottom-actions {
+  margin-top: auto; /* Pushes these buttons to the bottom */
+  padding-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}

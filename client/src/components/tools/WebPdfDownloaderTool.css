@@ -1,0 +1,99 @@
+/* client/src/components/tools/WebPdfDownloaderTool.css */
+
+/*
+  The .tool-form-container, .tool-title, .form-group, input, label, button[type="submit"],
+  .error-message, .results-section, .results-title, .info-message
+  are primarily styled by ToolsGlobal.css (or your ToolsView.css).
+  This file will add specific refinements or overrides for WebPdfDownloaderToolContent.
+*/
+
+.web-pdf-downloader-content { /* Add this class to the root div of WebPdfDownloaderToolContent.js */
+    /* Inherits padding from .tools-content-area or .tool-form-container */
+  }
+  
+  /* Optional: If you want form groups to be side-by-side on wider screens */
+  /*
+  .web-pdf-downloader-content form .form-row {
+    display: flex;
+    gap: 20px;
+    align-items: flex-end; / Align items to the bottom if labels are different heights /
+  }
+  
+  .web-pdf-downloader-content form .form-row .form-group {
+    flex: 1; / Each form group in a row takes equal space /
+    margin-bottom: 0; / Remove bottom margin if they are in a row /
+  }
+  
+  @media (max-width: 600px) {
+    .web-pdf-downloader-content form .form-row {
+      flex-direction: column;
+      gap: 0;
+    }
+    .web-pdf-downloader-content form .form-row .form-group {
+      margin-bottom: 20px; / Add back margin for stacked view /
+    }
+  }
+  */
+  
+  /* Styling for the results list specifically */
+  .web-pdf-downloader-content .results-section ul {
+    list-style: none; /* Already set in global, but good to reiterate */
+    padding-left: 0;
+    margin-top: 10px;
+  }
+  
+  .web-pdf-downloader-content .results-section li {
+    background-color: #333338; /* Slightly different item background */
+    padding: 10px 15px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    transition: background-color 0.2s ease;
+    border: 1px solid #404045;
+  }
+  
+  .web-pdf-downloader-content .results-section li:hover {
+    background-color: #3c3c42;
+  }
+  
+  .web-pdf-downloader-content .results-section li a {
+    color: #90caf9; /* A nice light blue for links */
+    text-decoration: none;
+    font-weight: 500;
+    display: flex; /* For icon alignment if you add one */
+    align-items: center;
+  }
+  
+  .web-pdf-downloader-content .results-section li a:hover {
+    color: #bbdefb;
+    text-decoration: underline;
+  }
+  
+  /* Optional: Icon for PDF links */
+  .web-pdf-downloader-content .results-section li a::before {
+    content: '📄'; /* Or use an SVG icon via CSS background or a library like Heroicons/FontAwesome */
+    margin-right: 8px;
+    font-size: 1.1em;
+  }
+  
+  /* Loading spinner placeholder (you'd use a real spinner component or CSS animation) */
+  .web-pdf-downloader-content .loading-spinner-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    color: #aaa;
+  }
+  
+  .web-pdf-downloader-content .loader { /* Basic CSS loader */
+    border: 4px solid #555; /* Light grey */
+    border-top: 4px solid #007bff; /* Blue */
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
