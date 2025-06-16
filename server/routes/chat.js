@@ -4,10 +4,8 @@ const axios = require('axios');
 const { tempAuth } = require('../middleware/authMiddleware');
 const ChatHistory = require('../models/ChatHistory');
 const { v4: uuidv4 } = require('uuid');
-// --- MODIFICATION START ---
 const User = require('../models/User'); // To fetch user-specific API keys
 const { decrypt } = require('../services/encryptionService'); // To decrypt the keys
-// --- MODIFICATION END ---
 
 const router = express.Router();
 
@@ -35,7 +33,6 @@ router.post('/message', tempAuth, async (req, res) => {
     
     const userId = req.user._id.toString();
 
-    // No changes to initial validation
     if (!message || typeof message !== 'string' || message.trim() === '') {
         return res.status(400).json({ message: 'Message text required.' });
     }
@@ -47,31 +44,32 @@ router.post('/message', tempAuth, async (req, res) => {
     }
 
     try {
-        // --- MODIFICATION START: Improved API Key Fetching and Validation ---
-
         const user = await User.findById(userId).select('+geminiApiKey +grokApiKey');
 
         if (!user) {
             return res.status(404).json({ message: "User account not found." });
         }
 
-        // Decrypt keys only if they exist to avoid errors
         const decryptedGeminiKey = user.geminiApiKey ? decrypt(user.geminiApiKey) : null;
         const decryptedGrokKey = user.grokApiKey ? decrypt(user.grokApiKey) : null;
         
-        const selectedLlmProvider = llmProvider || process.env.DEFAULT_LLM_PROVIDER_NODE || 'gemini';
-
-        // Now, validate that the *required* key for the selected provider exists
-        if (selectedLlmProvider.startsWith('gemini') && !decryptedGeminiKey) {
+        // Normalize llmProvider to lowercase for consistent checks and for sending to Python
+        const normalizedLlmProvider = (llmProvider || process.env.DEFAULT_LLM_PROVIDER_NODE || 'gemini').toLowerCase();
+        
+        // Validate Gemini key if Gemini is selected and user has no key
+        if (normalizedLlmProvider.startsWith('gemini') && !decryptedGeminiKey) {
             console.error(`User ${userId} tried to use Gemini without a configured API key.`);
             return res.status(400).json({ message: "Chat Error: User Gemini API key is required but was not provided." });
         }
-        if (selectedLlmProvider.startsWith('grok') && !decryptedGrokKey) {
-            console.error(`User ${userId} tried to use Grok without a configured API key.`);
-            return res.status(400).json({ message: "Chat Error: User Grok API key is required but was not provided." });
+
+        // For Grok (and potentially other providers where Python has a server-wide .env fallback):
+        // We will pass decryptedGrokKey (which might be null if user has no key).
+        // Python's llm_handler will then attempt to use os.environ.get("GROQ_API_KEY") if the user-specific key is null.
+        // If both are null, Python will raise the error, which is the correct behavior.
+        // The previous stricter check for Grok key here in Node.js is removed to allow Python's .env fallback.
+        if (normalizedLlmProvider.startsWith('grok') && !decryptedGrokKey) {
+            console.log(`User ${userId} is using Grok without a user-specific API key. Python service will attempt to use its fallback .env key.`);
         }
-        
-        // --- MODIFICATION END ---
 
 
         if (!PYTHON_AI_SERVICE_URL) {
@@ -83,21 +81,20 @@ router.post('/message', tempAuth, async (req, res) => {
         const selectedLlmModel = llmModelName || null;
         const useMultiQuery = enableMultiQuery === undefined ? true : !!enableMultiQuery;
 
-        console.log(`>>> POST /api/chat/message: User=${userId}, Session=${sessionId}, RAG=${performRagRequest}, Provider=${selectedLlmProvider}`);
+        console.log(`>>> POST /api/chat/message: User=${userId}, Session=${sessionId}, RAG=${performRagRequest}, Provider=${normalizedLlmProvider}`);
 
         const pythonPayload = {
             user_id: userId,
             query: message.trim(),
             chat_history: history,
-            llm_provider: selectedLlmProvider,
+            llm_provider: normalizedLlmProvider, // Send the normalized provider
             llm_model_name: selectedLlmModel,
             system_prompt: systemPrompt,
             perform_rag: performRagRequest,
             enable_multi_query: useMultiQuery,
-            // --- This part you had correct: Add decrypted keys to the payload ---
             api_keys: {
                 gemini: decryptedGeminiKey,
-                grok: decryptedGrokKey
+                grok: decryptedGrokKey // Will be null if user hasn't set one
             }
         };
 
@@ -106,12 +103,12 @@ router.post('/message', tempAuth, async (req, res) => {
         const pythonResponse = await axios.post(
             `${PYTHON_AI_SERVICE_URL}/generate_chat_response`,
             pythonPayload,
-            { timeout: 120000 } // Increased timeout for potentially long AI responses
+            { timeout: 120000 } // Increased timeout
         );
 
         if (!pythonResponse.data || pythonResponse.data.status !== 'success') {
             console.error("   Error or unexpected response from Python AI Core Service:", pythonResponse.data);
-            throw new Error(pythonResponse.data?.error || "Failed to get valid response from AI service.");
+            throw new Error(pythonResponse.data?.error || pythonResponse.data?.message || "Failed to get valid response from AI service.");
         }
 
         const { 
@@ -136,11 +133,10 @@ router.post('/message', tempAuth, async (req, res) => {
         let statusCode = error.response?.status || 500;
         let clientMessage = "Failed to get response from AI service.";
 
-        if (error.response?.data?.error) {
+        if (error.response?.data?.message) { // Prefer message from Python if available
+            clientMessage = error.response.data.message;
+        } else if (error.response?.data?.error) {
             clientMessage = error.response.data.error;
-        } else if (error.message.includes("User Gemini API key is required")) {
-             // Catch our specific error message
-            clientMessage = "Chat Error: User Gemini API key is required but was not provided.";
         } else if (error.message) {
             clientMessage = error.message;
         }
@@ -149,7 +145,8 @@ router.post('/message', tempAuth, async (req, res) => {
     }
 });
 
-// Continue with existing chat session
+// ... (rest of the file remains the same) ...
+
 router.post('/continue', tempAuth, async (req, res) => {
     const { sessionId } = req.body;
     const userId = req.user._id.toString();
@@ -299,16 +296,12 @@ router.delete('/session/:sessionId', tempAuth, async (req, res) => {
     try {
         console.log(`>>> DELETE /api/chat/session/${sessionId} requested by User ${userId}`);
         
-        // Find and delete the chat history document that matches BOTH the session ID
-        // and the authenticated user's ID. This is a crucial security check.
         const result = await ChatHistory.findOneAndDelete({ 
             sessionId: sessionId, 
             userId: userId 
         });
 
         if (!result) {
-            // This can happen if the user tries to delete a session that doesn't exist
-            // or doesn't belong to them.
             console.warn(`   Session not found or user mismatch for session ${sessionId} and user ${userId}.`);
             return res.status(404).json({ message: 'Session not found or you do not have permission to delete it.' });
         }

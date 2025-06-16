@@ -482,8 +482,7 @@ export const renameUserFile = (serverFilename, newOriginalName) => api.patch(`${
 export const deleteUserFile = (serverFilename) => api.delete(`${PROXY_PATH}/files/${serverFilename}`).then(res => res.data);
 
 // --- Document Analysis (Proxied) ---
-export const analyzeDocument = (analysisData) => api.post(`${PROXY_PATH}/analyze_document`, analysisData).then(res => res.data);
-
+export const analyzeDocument = (analysisData) => api.post(`/analysis/document`, analysisData).then(res => res.data);
 // --- Academic Search Tools (Proxied) ---
 // MODIFIED: searchCoreApi now takes a single params object
 export const searchCoreApi = (params) => api.post(`${PROXY_PATH}/search/core`, params).then(res => res.data);

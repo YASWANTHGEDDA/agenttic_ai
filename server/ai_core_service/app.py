@@ -1,4 +1,3 @@
-# FusedChatbot/server/ai_core_service/app.py
 import os
 import sys
 import logging
@@ -75,7 +74,7 @@ def health_check():
         "embedding_dimension": None,
         "sentence_transformer_load": "Unknown", "default_index_loaded": False,
         "gemini_sdk_installed": bool(getattr(llm_handler, 'genai', False)), 
-        "ollama_sdk_installed": bool(getattr(llm_handler, 'ChatOllama', False)), # Adjusted for actual import
+        "ollama_sdk_installed": bool(getattr(llm_handler, 'Client', False)), # MODIFIED: Corrected SDK check for Ollama
         "groq_sdk_installed": bool(getattr(llm_handler, 'Groq', False)), 
         "message": ""
     }
@@ -251,40 +250,154 @@ def analyze_document_route():
         logger.error(f"Failed analysis: User='{user_id}', Doc='{document_name}': {e}", exc_info=True)
         return create_error_response(f"Failed to perform analysis on '{document_name}'", 500, "AnalysisError", details=str(e))
 
-def generate_response(llm_provider, query, context_text, chat_history, system_prompt, 
-                      user_gemini_api_key=None, user_grok_api_key=None,
-                      temperature=None, max_tokens=None): # <--- ORIGINAL SIGNATURE
-    # ... logic to build prompt ...
+# --- MODIFICATION START: Added /generate_chat_response route ---
+@app.route('/generate_chat_response', methods=['POST'])
+def generate_chat_response_route():
+    logger.info("\n--- Received request at /generate_chat_response ---")
+    if not request.is_json:
+        return create_error_response("Request must be JSON", 400, "InvalidContentType")
+    data = request.get_json()
+    if data is None:
+        return create_error_response("Invalid or empty JSON body", 400, "EmptyPayload")
 
-    if llm_provider.startswith("groq_"):
-        if not user_grok_api_key:
-            raise ValueError("Groq API key is required for Groq provider.")
-        try:
-            # Initialize Groq client if not already done, or get from a global/class instance
-            # from groq import Groq # Make sure Groq is imported
-            # client = Groq(api_key=user_grok_api_key)
+    user_id = data.get('user_id')
+    query_text = data.get('query')
+    chat_history = data.get('chat_history', [])
+    llm_provider = data.get('llm_provider', config.DEFAULT_LLM_PROVIDER)
+    llm_model_name = data.get('llm_model_name') 
+    system_prompt = data.get('system_prompt')
+    perform_rag = data.get('perform_rag', False)
+    # enable_multi_query from Node.js (true/false)
+    enable_multi_query = data.get('enable_multi_query', True if perform_rag else False) 
+    api_keys = data.get('api_keys', {})
+    temperature = data.get('temperature') 
+    max_tokens = data.get('max_tokens')
+    ollama_url_override = data.get('ollama_url_override')
 
-            # This is where the Groq model name would be used.
-            # Previously, it might have been hardcoded or derived differently.
-            # groq_model_to_use = "llama3-8b-8192" # Example of old way
+    user_gemini_api_key = api_keys.get('gemini')
+    user_grok_api_key = api_keys.get('groq')
 
-            # chat_completion = client.chat.completions.create(
-            #     messages=formatted_messages_for_api,
-            #     model=groq_model_to_use, # <--- OLD USAGE
-            #     temperature=temperature,
-            #     max_tokens=max_tokens
-            # )
-            # final_answer = chat_completion.choices[0].message.content
-            pass # Placeholder for old logic
-        except Exception as e:
-            logger.error(f"Error calling Groq API: {e}")
-            raise ConnectionError(f"Failed to connect to Groq API: {e}") from e
-    # ... other providers like gemini, ollama ...
-    else:
-        raise ValueError(f"Unsupported LLM provider: {llm_provider}")
+    if not all([user_id, query_text]):
+        return create_error_response("Missing user_id or query", 400, "MissingFields")
 
-    thinking_content = "Thinking process details..." # Placeholder
-    return final_answer, thinking_content
+    logger.info(f"Chat: User='{user_id}', Provider='{llm_provider}', Model='{llm_model_name or 'Default'}', RAG='{perform_rag}', MultiQ='{enable_multi_query}'")
+    logger.debug(f"Chat query: '{query_text[:100]}...'")
+
+    context_text = ""
+    retrieved_references = []
+    unique_retrieved_docs_content = set() 
+
+    try:
+        if perform_rag:
+            logger.info(f"RAG Enabled. Retrieving documents for query and potential sub-queries.")
+            
+            all_queries_for_retrieval = [query_text]
+            
+            # Only generate sub-queries if RAG and multi-query are enabled, and query is non-trivial
+            if enable_multi_query and len(query_text.split()) > 3:
+                logger.info("Multi-query enabled, generating sub-queries...")
+                sub_queries = llm_handler.generate_sub_queries_via_llm(
+                    original_query=query_text,
+                    llm_provider=llm_provider,
+                    llm_model_name=None, # Let llm_handler use its default for sub-queries
+                    user_gemini_api_key=user_gemini_api_key,
+                    user_grok_api_key=user_grok_api_key,
+                    ollama_url_override=ollama_url_override
+                )
+                if sub_queries:
+                    logger.info(f"Generated {len(sub_queries)} sub-queries: {sub_queries}")
+                    all_queries_for_retrieval.extend(sub_queries)
+                else:
+                    logger.info("No sub-queries generated or sub-query generation failed/skipped.")
+            
+            rag_docs_accumulator = []
+            for idx, current_q in enumerate(all_queries_for_retrieval):
+                k_val = config.DEFAULT_RAG_K if idx == 0 else config.DEFAULT_RAG_K_PER_SUBQUERY_CONFIG
+                logger.debug(f"Querying FAISS for: '{current_q[:50]}...' with k={k_val}")
+                results = faiss_handler.query_index(user_id, current_q, k=k_val)
+                for doc, score in results:
+                    if doc.page_content not in unique_retrieved_docs_content:
+                        rag_docs_accumulator.append({
+                            "content": doc.page_content,
+                            "metadata": doc.metadata,
+                            "score": float(score),
+                            "query_source": "original_query" if idx == 0 else f"sub_query_{idx+1}" # Start sub_query_ N from 1
+                        })
+                        unique_retrieved_docs_content.add(doc.page_content)
+            
+            rag_docs_accumulator.sort(key=lambda x: x["score"], reverse=True) # Assuming higher score is better
+            selected_docs_for_context = rag_docs_accumulator[:config.MAX_RAG_CHUNKS_FOR_CONTEXT]
+            
+            if selected_docs_for_context:
+                logger.info(f"Forming context from {len(selected_docs_for_context)} unique document chunks.")
+                context_parts = []
+                for i, doc_info in enumerate(selected_docs_for_context):
+                    context_parts.append(f"[{i+1}] Source: {doc_info['metadata'].get('documentName', 'Unknown Document')}\nContent: {doc_info['content']}\n---")
+                    retrieved_references.append({
+                        "id": i + 1,
+                        "documentName": doc_info['metadata'].get("documentName"),
+                        "serverFilename": doc_info['metadata'].get("serverFilename"),
+                        "score": doc_info["score"],
+                        "preview": doc_info["content"][:150] + "..." 
+                    })
+                context_text = "\n".join(context_parts)
+                if not context_text.strip(): # Check if context_text became empty after join
+                    context_text = "No relevant documents found to form context." # Should not happen if selected_docs is non-empty
+            else:
+                context_text = "No relevant documents found to form context."
+                logger.info("No documents found or selected after RAG processing for context.")
+        else:
+            logger.info("RAG is disabled for this request.")
+            # context_text remains empty, SYNTHESIS_PROMPT_TEMPLATE_STR handles this.
+
+        llm_reply_text, thinking_content = llm_handler.generate_response(
+            llm_provider=llm_provider,
+            query=query_text,
+            context_text=context_text, # Will be empty if RAG disabled or no docs found
+            chat_history=chat_history,
+            system_prompt=system_prompt,
+            llm_model_name=llm_model_name,
+            user_gemini_api_key=user_gemini_api_key,
+            user_grok_api_key=user_grok_api_key,
+            ollama_url_override=ollama_url_override,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+
+        return jsonify({
+            "status": "success",
+            "llm_response": llm_reply_text,
+            "references": retrieved_references if perform_rag and retrieved_references else [], 
+            "thinking_content": thinking_content
+        }), 200
+
+    except (llm_handler.GroqAuthenticationError, llm_handler.GroqAPIError, llm_handler.OllamaResponseError) as api_err: # Catch specific SDK errors
+        logger.error(f"LLM API Error during chat response generation: {api_err}", exc_info=True)
+        # Try to provide a more specific message if possible from the error object
+        error_detail = str(api_err)
+        if hasattr(api_err, 'message'): error_detail = api_err.message
+        if hasattr(api_err, 'error'): error_detail = api_err.error
+
+        status_code = 503
+        error_code = "AIProviderAPIError"
+        if hasattr(api_err, 'status_code') and api_err.status_code:
+            status_code = api_err.status_code
+            if 400 <= status_code < 500: # Client-side errors from API like bad key
+                 error_code = "AIProviderClientError"
+
+
+        return create_error_response(f"Chat Error: API issue with {llm_provider.upper()}. {error_detail}", status_code, error_code)
+    except ConnectionError as ce: 
+        logger.error(f"LLM Connection Error during chat response generation: {ce}", exc_info=False)
+        return create_error_response(f"Chat Error: Could not connect to the AI service provider. {str(ce)}", 503, "AIConnectionError")
+    except ValueError as ve: 
+        logger.error(f"LLM Value Error during chat response generation: {ve}", exc_info=True)
+        return create_error_response(f"Chat Error: Invalid configuration or input for AI service. {str(ve)}", 400, "AIValueError")
+    except Exception as e:
+        logger.error(f"General error during chat response generation: {e}", exc_info=True)
+        return create_error_response("An unexpected error occurred while generating the chat response.", 500, "ChatGenerationError", details=str(e))
+# --- MODIFICATION END ---
+
 
 def _save_uploaded_file_temp(file_storage):
     # Ensure a unique filename even with multiple requests

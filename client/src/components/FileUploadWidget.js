@@ -4,7 +4,7 @@ import { uploadFile } from '../services/api';
 
 const FileUploadWidget = ({ onUploadSuccess }) => {
   const [selectedFile, setSelectedFile] = useState(null);
-  const [uploadStatus, setUploadStatus] = useState(''); // 'uploading', 'success', 'error', ''
+  const [uploadStatus, setUploadStatus] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const fileInputRef = useRef(null);
 
@@ -35,7 +35,6 @@ const FileUploadWidget = ({ onUploadSuccess }) => {
       setSelectedFile(file);
       setStatusMessage(`Selected: ${file.name}`);
       setUploadStatus('');
-
     }
   };
 
@@ -59,30 +58,44 @@ const FileUploadWidget = ({ onUploadSuccess }) => {
     formData.append('file', selectedFile);
 
     try {
-      const response = await uploadFile(formData);
+      // apiResult IS the direct JSON response from the Python service,
+      // proxied through Node.js.
+      // As per your console log, its structure is:
+      // { chunks_added: N, message: "Python's message", status: "added" }
+      const apiResult = await uploadFile(formData); 
+      console.log('FileUploadWidget - API Result (already res.data):', apiResult);
 
+      // The message is directly on apiResult
+      const successMsg = apiResult?.message || 'Upload successful!'; 
+      
       setUploadStatus('success');
-      setStatusMessage(response.data.message || 'Upload successful!');
+      setStatusMessage(successMsg);
 
       setSelectedFile(null);
       if (fileInputRef.current) {
           fileInputRef.current.value = '';
       }
 
+      // When calling onUploadSuccess, we need to ensure FileManagerWidget
+      // receives data in a format it expects or handles this format.
+      // Let's pass what we have, and FileManagerWidget might need adjustment
+      // if it expects a different structure (e.g., if it was expecting Node's wrapper).
       if (onUploadSuccess && typeof onUploadSuccess === 'function') {
-          onUploadSuccess();
+          // Since the file was successfully added to Python's RAG,
+          // onUploadSuccess should trigger a refresh of the file list.
+          // We don't necessarily need to pass apiResult if it just triggers a refresh.
+          onUploadSuccess(); 
       }
 
       setTimeout(() => {
           setUploadStatus(prevStatus => prevStatus === 'success' ? '' : prevStatus);
-          setStatusMessage(prevMsg => prevMsg === (response.data.message || 'Upload successful!') ? '' : prevMsg);
+          setStatusMessage(prevMsg => prevMsg === successMsg ? '' : prevMsg);
       }, 4000);
 
-
     } catch (err) {
-      console.error("Upload Error:", err.response || err);
+      console.error("Upload Error in FileUploadWidget:", err); 
       setUploadStatus('error');
-      setStatusMessage(err.response?.data?.message || 'Upload failed. Please check the file or try again.');
+      setStatusMessage(err.message || 'Upload failed. Please check the file or try again.');
     }
   };
 
@@ -91,9 +104,7 @@ const FileUploadWidget = ({ onUploadSuccess }) => {
   };
 
   return (
-    // MODIFICATION: Added 'sidebar-panel' class for consistent padding.
     <div className="file-upload-widget sidebar-panel">
-      {/* MODIFICATION: Changed h4 to a consistent header style */}
       <h3 className="sidebar-header">Upload File</h3>
       <input
         type="file"
@@ -126,87 +137,20 @@ const FileUploadWidget = ({ onUploadSuccess }) => {
   );
 };
 
-// --- CSS for FileUploadWidget ---
-// MODIFICATION: All CSS rules have been updated to use theme variables.
+// --- CSS --- (Keep as is)
 const FileUploadWidgetCSS = `
-.file-upload-widget {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  /* Padding is now inherited from the .sidebar-panel class for consistency */
-}
-
-/* The .sidebar-header class from ChatPage.css will now style the header */
-
-.select-file-btn, .upload-btn {
-  width: 100%;
-  padding: 10px 15px; /* Slightly larger padding for better click area */
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  box-sizing: border-box;
-}
-
-/* "Choose File" button style (secondary look) */
-.select-file-btn {
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-primary);
-}
-.select-file-btn:hover:not(:disabled) {
-  border-color: var(--accent-active);
-}
-
-/* "Upload" button style (primary action look) */
-.upload-btn {
-  background-color: var(--accent-active);
-  color: var(--text-on-accent); /* CRITICAL FIX: Ensures text is light */
-  border: 1px solid var(--accent-active);
-}
-.upload-btn:hover:not(:disabled) {
-  background-color: var(--accent-hover);
-  border-color: var(--accent-hover);
-}
-
-/* Disabled state for both buttons */
-.select-file-btn:disabled, .upload-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Status message styling */
-.status-message {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  padding: 8px 10px;
-  background-color: var(--bg-primary); /* Use primary BG for better contrast */
-  border: 1px solid var(--border-primary);
-  border-radius: 6px;
-  text-align: center;
-  min-height: 1.6em;
-  line-height: 1.4;
-  word-break: break-word;
-  transition: all 0.2s ease;
-}
-
-.status-message.uploading {
-  color: var(--accent-active);
-  border-color: var(--accent-active);
-}
-.status-message.success {
-  color: #27ae60; /* Using a standard green for success */
-  border-color: #27ae60;
-  background-color: rgba(39, 174, 96, 0.1);
-}
-.status-message.error {
-  color: var(--error-color, #e53e3e);
-  border-color: var(--error-color, #e53e3e);
-  background-color: var(--error-bg, rgba(229, 62, 62, 0.1));
-}
+.file-upload-widget { display: flex; flex-direction: column; gap: 12px; }
+.select-file-btn, .upload-btn { width: 100%; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500; transition: all 0.2s ease; box-sizing: border-box; }
+.select-file-btn { background-color: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-primary); }
+.select-file-btn:hover:not(:disabled) { border-color: var(--accent-active); }
+.upload-btn { background-color: var(--accent-active); color: var(--text-on-accent); border: 1px solid var(--accent-active); }
+.upload-btn:hover:not(:disabled) { background-color: var(--accent-hover); border-color: var(--accent-hover); }
+.select-file-btn:disabled, .upload-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.status-message { font-size: 0.8rem; color: var(--text-secondary); padding: 8px 10px; background-color: var(--bg-primary); border: 1px solid var(--border-primary); border-radius: 6px; text-align: center; min-height: 1.6em; line-height: 1.4; word-break: break-word; transition: all 0.2s ease; }
+.status-message.uploading { color: var(--accent-active); border-color: var(--accent-active); }
+.status-message.success { color: #27ae60; border-color: #27ae60; background-color: rgba(39, 174, 96, 0.1); }
+.status-message.error { color: var(--error-color, #e53e3e); border-color: var(--error-color, #e53e3e); background-color: var(--error-bg, rgba(229, 62, 62, 0.1)); }
 `;
-// --- Inject CSS ---
 const styleTagUploadId = 'file-upload-widget-styles';
 if (!document.getElementById(styleTagUploadId)) {
     const styleTag = document.createElement("style");
@@ -215,6 +159,5 @@ if (!document.getElementById(styleTagUploadId)) {
     styleTag.innerText = FileUploadWidgetCSS;
     document.head.appendChild(styleTag);
 }
-// --- End CSS Injection ---
 
 export default FileUploadWidget;

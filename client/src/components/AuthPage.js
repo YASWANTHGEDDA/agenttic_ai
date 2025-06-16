@@ -50,7 +50,15 @@ const AuthPage = ({ setIsAuthenticated }) => {
                 response = await signupUser(userData);
             }
 
-            const { hasProvidedApiKeys, sessionId, username: loggedInUsername, _id: userId } = response.data;
+            // ==================================================================
+            //  START OF FIX
+            // ==================================================================
+            // The api service returns the `data` object directly on success.
+            // We destructure `response` itself, not `response.data`.
+            const { hasProvidedApiKeys, sessionId, username: loggedInUsername, _id: userId } = response;
+            // ==================================================================
+            //  END OF FIX
+            // ==================================================================
 
             if (!userId || !sessionId || !loggedInUsername) {
                 throw new Error("Incomplete authentication data received from server.");
